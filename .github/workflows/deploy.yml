@@ -90,31 +90,35 @@ jobs:
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
           cd ${{ env.PROJECT_PATH }}
           
-          # Создаем виртуальное окружение если его нет
+          echo '📦 Creating virtual environment if needed...'
           if [ ! -d 'venv' ]; then
             python3 -m venv venv
           fi
           
-          # Активируем и устанавливаем зависимости
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          echo '📚 Installing dependencies...'
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install -r requirements.txt
           
-          # Обновляем токен в коде
+          echo '🔑 Updating bot token...'
           sed -i 's/{{token}}/${{ secrets.BOT_TOKEN }}/g' ssl_bot.py
           
-          # Перезапускаем бота
+          echo '🔄 Restarting bot...'
           pkill -f 'python.*ssl_bot.py' || true
           sleep 2
-          nohup python ssl_bot.py > bot_output.log 2>&1 &
           
-          # Проверяем запуск
+          echo '🚀 Starting bot...'
+          cd ${{ env.PROJECT_PATH }}
+          nohup venv/bin/python ssl_bot.py > bot_output.log 2>&1 &
+          
+          echo '⏳ Waiting for bot to start...'
           sleep 3
+          
           if pgrep -f 'python.*ssl_bot.py' > /dev/null; then
             echo '✅ Bot started successfully'
           else
             echo '❌ Bot failed to start'
-            cat bot_output.log
+            echo '📄 Last 20 lines of log:'
+            tail -20 bot_output.log
             exit 1
           fi
         "
@@ -134,5 +138,4 @@ jobs:
           
           Status: *${{ job.status }}*
           Server: `${{ secrets.SSH_HOST }}:${{ secrets.SSH_PORT }}`
-          Path: `${{ env.PROJECT_PATH }}`
         format: markdown
