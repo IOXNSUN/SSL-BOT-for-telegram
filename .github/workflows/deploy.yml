@@ -126,6 +126,8 @@ jobs:
             tail -20 bot_output.log
             exit 1
           fi
+          
+          echo '🎉 Деплой завершен успешно'
         "
 
     - name: Notify Telegram about deployment
