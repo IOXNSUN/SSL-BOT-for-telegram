@@ -87,13 +87,6 @@ jobs:
           echo '✅ Директория создана или уже существует'
         "
 
-    - name: Debug - Show directory before copy
-      run: |
-        echo "📂 Содержимое директории ДО копирования:"
-        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          ls -la ${{ env.PROJECT_PATH }} || echo 'Директория пуста'
-        "
-
     - name: Copy files via rsync
       run: |
         echo "📋 Копирование файлов на сервер..."
@@ -108,14 +101,7 @@ jobs:
           ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.PROJECT_PATH }}/
         echo "✅ Файлы скопированы"
 
-    - name: Debug - Show directory after copy
-      run: |
-        echo "📂 Содержимое директории ПОСЛЕ копирования:"
-        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          ls -la ${{ env.PROJECT_PATH }}
-        "
-
-    - name: Debug - Check Python environment
+    - name: Debug - Check and fix Python environment
       run: |
         echo "🐍 Проверка Python окружения на сервере:"
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
@@ -126,9 +112,23 @@ jobs:
           echo 'Venv status:'
           if [ -d '${{ env.PROJECT_PATH }}/venv' ]; then
             echo '✅ venv существует'
-            ls -la ${{ env.PROJECT_PATH }}/venv/bin/
+            if [ -d '${{ env.PROJECT_PATH }}/venv/bin' ]; then
+              echo '✅ venv/bin существует'
+              ls -la ${{ env.PROJECT_PATH }}/venv/bin/
+            else
+              echo '❌ venv/bin НЕ существует - venv повреждено!'
+              echo 'Удаляем поврежденное venv...'
+              rm -rf ${{ env.PROJECT_PATH }}/venv
+              echo 'Создаем новое venv...'
+              python3 -m venv ${{ env.PROJECT_PATH }}/venv
+              echo '✅ Новое venv создано'
+              ls -la ${{ env.PROJECT_PATH }}/venv/bin/
+            fi
           else
             echo '❌ venv не существует'
+            echo 'Создаем venv...'
+            python3 -m venv ${{ env.PROJECT_PATH }}/venv
+            echo '✅ venv создано'
           fi
         "
 
@@ -141,15 +141,12 @@ jobs:
           cd ${{ env.PROJECT_PATH }}
           
           echo '📦 Шаг 1: Проверка виртуального окружения...'
-          if [ ! -f 'venv/bin/activate' ]; then
-            echo '❌ venv не найден! Создаем...'
+          if [ ! -d 'venv/bin' ]; then
+            echo '❌ venv/bin не найден! Создаем заново...'
+            rm -rf venv
             python3 -m venv venv
-            if [ $? -ne 0 ]; then
-              echo '❌ Ошибка создания venv!'
-              exit 1
-            fi
           else
-            echo '✅ venv существует'
+            echo '✅ venv в порядке'
           fi
           
           echo '📚 Шаг 2: Установка зависимостей...'
