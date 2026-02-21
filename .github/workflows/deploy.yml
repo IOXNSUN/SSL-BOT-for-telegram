@@ -133,21 +133,25 @@ jobs:
         "
 
     - name: Stop old bot process (only from our project folder)
-      continue-on-error: true
       run: |
         echo "🛑 Останавливаем старые процессы бота из папки ${{ env.PROJECT_PATH }}..."
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
           echo 'Поиск процессов бота в нашей папке...'
-          ps aux | grep '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' | grep -v grep
+          # Ищем процессы
+          PIDS=\$(pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' || true)
           
-          echo 'Остановка процессов...'
-          pkill -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' 2>&1 || echo 'Процессы не найдены в нашей папке'
-          sleep 2
-          
-          echo 'Проверка после остановки:'
-          ps aux | grep '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' | grep -v grep || echo '✅ Процессы в нашей папке остановлены'
+          if [ -n \"\$PIDS\" ]; then
+            echo \"Найдены процессы: \$PIDS\"
+            echo 'Останавливаем...'
+            pkill -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' 2>&1 || true
+            sleep 2
+            echo 'Проверка:'
+            pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' -a || echo '✅ Процессы остановлены'
+          else
+            echo '✅ Процессы не найдены (это нормально)'
+          fi
         "
-        echo "✅ Шаг остановки завершен"
+        echo "✅ Шаг остановки завершен успешно"
 
     - name: Deploy and restart bot
       run: |
