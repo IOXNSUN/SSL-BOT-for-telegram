@@ -88,6 +88,8 @@ jobs:
     - name: Deploy and restart bot
       run: |
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          set +e  # Временно отключаем выход при ошибках
+          
           cd ${{ env.PROJECT_PATH }}
           
           echo '📦 Проверяем виртуальное окружение...'
@@ -106,8 +108,8 @@ jobs:
           sed -i 's/{{token}}/${{ secrets.BOT_TOKEN }}/g' ssl_bot.py
           
           echo '🔄 Останавливаем старый процесс бота (если есть)...'
-          # Игнорируем ошибку, если процесс не найден
-          pkill -f 'python.*ssl_bot.py' 2>/dev/null || true
+          # Просто убиваем процесс, игнорируем любые ошибки
+          pkill -f 'python.*ssl_bot.py' 2>&1 || echo '✅ Процесс не найден - это нормально для первого запуска'
           sleep 2
           
           echo '🚀 Запускаем бота...'
@@ -128,6 +130,7 @@ jobs:
             exit 1
           fi
           
+          set -e  # Включаем обратно
           echo '🎉 Деплой завершен успешно'
         "
 
