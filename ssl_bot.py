@@ -14,10 +14,10 @@ import sys
 class ZoneFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, tz="Asia/Yekaterinburg"):
         super().__init__(fmt=fmt, datefmt=datefmt)
-        self.tz = ZoneInfo(tz)  # сохраняем объект зоны
+        self.tz = ZoneInfo(tz)
 
     def formatTime(self, record, datefmt=None):
-        dt = datetime.fromtimestamp(record.created, tz=self.tz)  # используем нужную зону
+        dt = datetime.fromtimestamp(record.created, tz=self.tz)
         if datefmt:
             return dt.strftime(datefmt)
         return dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -25,9 +25,22 @@ class ZoneFormatter(logging.Formatter):
 logger = logging.getLogger("postman_bot")
 logger.setLevel(logging.INFO)
 
+# Определяем, где мы запущены (тесты или продакшн)
+import sys
+if 'pytest' in sys.modules:
+    # Запуск в тестах - используем временную папку
+    log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, 'bot.log')
+else:
+    # Запуск на сервере
+    log_file = "/home/ioxnsun/SSL-BOT-for-telegram/bot.log"
+    # Создаем папку для логов на сервере (если её нет)
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+
 if not logger.handlers:
     file_handler = TimedRotatingFileHandler(
-        "/home/ioxnsun/SSL-BOT-for-telegram/bot.log",
+        log_file,
         when="D",
         interval=1,
         backupCount=7
