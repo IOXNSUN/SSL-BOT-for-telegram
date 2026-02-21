@@ -132,6 +132,21 @@ jobs:
           fi
         "
 
+    - name: Stop old bot process
+      continue-on-error: true
+      run: |
+        echo "🛑 Останавливаем старые процессы бота..."
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          echo 'Поиск процессов бота...'
+          pgrep -f 'python.*ssl_bot.py' -a || echo 'Процессы не найдены'
+          echo 'Остановка процессов...'
+          pkill -f 'python.*ssl_bot.py' 2>&1 || echo 'Процессы не найдены или уже остановлены'
+          sleep 2
+          echo 'Проверка после остановки:'
+          pgrep -f 'python.*ssl_bot.py' -a || echo '✅ Все процессы остановлены'
+        "
+        echo "✅ Шаг остановки завершен (ошибки игнорируются)"
+
     - name: Deploy and restart bot
       run: |
         echo "🚀 Начинаем деплой и запуск бота..."
@@ -171,29 +186,16 @@ jobs:
             exit 1
           fi
           
-          echo '🔄 Шаг 4: Проверка запущенных процессов бота...'
-          BOT_PIDS=\$(pgrep -f 'python.*ssl_bot.py' || true)
-          if [ -n \"\$BOT_PIDS\" ]; then
-            echo \"Найдены процессы бота: \$BOT_PIDS\"
-            echo '🛑 Шаг 5: Остановка старого процесса...'
-            # Игнорируем любой код возврата от pkill
-            pkill -f 'python.*ssl_bot.py' 2>&1 || true
-            echo '✅ Процессы остановлены'
-          else
-            echo '✅ Бот не запущен, остановка не требуется'
-          fi
-          sleep 2
-          
-          echo '🚀 Шаг 6: Запуск нового процесса бота...'
+          echo '🚀 Шаг 4: Запуск нового процесса бота...'
           cd ${{ env.PROJECT_PATH }}
           nohup venv/bin/python ssl_bot.py > bot_output.log 2>&1 &
           BOT_PID=$!
           echo "Бот запущен с PID: $BOT_PID"
           
-          echo '⏳ Шаг 7: Ожидание запуска...'
+          echo '⏳ Шаг 5: Ожидание запуска...'
           sleep 5
           
-          echo '🔍 Шаг 8: Проверка запуска...'
+          echo '🔍 Шаг 6: Проверка запуска...'
           if pgrep -f 'python.*ssl_bot.py' > /dev/null; then
             echo '✅ Бот успешно запущен'
             echo '📄 Информация о процессе:'
@@ -209,7 +211,7 @@ jobs:
             exit 1
           fi
           
-          echo '🎉 Шаг 9: Деплой завершен успешно'
+          echo '🎉 Деплой завершен успешно'
         "
 
     - name: Final debug - Check running processes
