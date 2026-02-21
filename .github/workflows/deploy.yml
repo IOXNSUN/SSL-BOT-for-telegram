@@ -157,126 +157,36 @@ jobs:
         "
         echo "✅ Шаг остановки завершен успешно"
 
-    - name: Deploy and restart bot
+    - name: Deploy and restart bot via systemd
       run: |
-        echo "🚀 Начинаем деплой и запуск бота..."
+        echo "🚀 Деплой и перезапуск systemd сервиса..."
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          set -x  # Включаем отладку - каждая команда будет выводиться
-          
           cd ${{ env.PROJECT_PATH }}
           
           echo '📦 Шаг 1: Проверка виртуального окружения...'
           if [ ! -d 'venv/bin' ]; then
-            echo '❌ venv/bin не найден! Создаем заново...'
-            rm -rf venv
+            echo '❌ venv/bin не найден! Создаем...'
             python3 -m venv venv
           else
             echo '✅ venv в порядке'
           fi
           
           echo '📚 Шаг 2: Установка зависимостей...'
-          echo 'Upgrade pip:'
           venv/bin/pip install --upgrade pip
-          echo 'Pip version:'
-          venv/bin/pip --version
-          echo 'Install requirements:'
           venv/bin/pip install -r requirements.txt
-          if [ $? -ne 0 ]; then
-            echo '❌ Ошибка установки зависимостей!'
-            exit 1
-          fi
           
           echo '🔑 Шаг 3: Обновление токена бота...'
-          if [ -f ssl_bot.py ]; then
-            sed -i 's/{{token}}/${{ secrets.BOT_TOKEN }}/g' ssl_bot.py
-            echo '✅ Токен обновлен'
-          else
-            echo '❌ Файл ssl_bot.py не найден!'
-            ls -la
-            exit 1
-          fi
+          sed -i 's/{{token}}/${{ secrets.BOT_TOKEN }}/g' ssl_bot.py
           
-          echo '🚀 Шаг 4: Запуск нового процесса бота...'
-          cd ${{ env.PROJECT_PATH }}
-          nohup venv/bin/python ssl_bot.py > bot_output.log 2>&1 &
-          BOT_PID=$!
-          echo "Бот запущен с PID: $BOT_PID"
+          echo '🔄 Шаг 4: Перезапуск systemd сервиса...'
+          sudo systemctl restart sslbot.service
+          sleep 3
           
-          echo '⏳ Шаг 5: Ожидание запуска...'
-          sleep 5
+          echo '🔍 Шаг 5: Проверка статуса...'
+          sudo systemctl status sslbot.service --no-pager
           
-          echo '🔍 Шаг 6: Проверка запуска...'
-          if pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' > /dev/null; then
-            echo '✅ Бот успешно запущен'
-            echo '📄 Информация о процессе:'
-            ps aux | grep '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' | grep -v grep
-          else
-            echo '❌ Бот не запустился'
-            echo '📄 Последние 20 строк лога:'
-            if [ -f bot_output.log ]; then
-              tail -20 bot_output.log
-            else
-              echo 'Файл лога не создан'
-            fi
-            exit 1
-          fi
-          
-          echo '🎉 Деплой завершен успешно'
-        "
-
-    - name: Health Check - Verify bot is working
-      run: |
-        echo "🏥 Проверка работоспособности бота..."
-        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          # Даем боту время на инициализацию
-          sleep 5
-          
-          echo '🔍 Шаг 1: Проверка процесса...'
-          BOT_PID=\$(pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py')
-          if [ -z \"\$BOT_PID\" ]; then
-            echo '❌ КРИТИЧНО: Процесс бота не найден!'
-            exit 1
-          else
-            echo \"✅ Процесс бота работает (PID: \$BOT_PID)\"
-          fi
-          
-          echo '📄 Шаг 2: Проверка логов...'
-          if [ -f ${{ env.PROJECT_PATH }}/bot_output.log ]; then
-            echo 'Последние 20 строк лога:'
-            tail -20 ${{ env.PROJECT_PATH }}/bot_output.log
-            
-            # Проверяем на критические ошибки
-            if tail -50 ${{ env.PROJECT_PATH }}/bot_output.log | grep -E 'ERROR|CRITICAL|Traceback' > /dev/null; then
-              echo '❌ Найдены ошибки в логах!'
-              exit 1
-            else
-              echo '✅ Критических ошибок в логах нет'
-            fi
-          else
-            echo '⚠️ Файл лога не найден'
-          fi
-          
-          echo '📊 Шаг 3: Использование ресурсов...'
-          ps -p \$BOT_PID -o %cpu,%mem,etime || echo 'Не удалось получить информацию'
-          
-          echo '🎉 Health check успешно пройден!'
-        "
-
-    - name: Final debug - Check running processes
-      run: |
-        echo "📊 Финальная проверка процессов на сервере:"
-        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          echo 'Все Python процессы:'
-          ps aux | grep python
-          echo ''
-          echo 'Специфичные процессы нашего бота:'
-          pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' -a || echo 'Наш бот не запущен'
-          echo ''
-          echo 'Другие боты (должны работать):'
-          ps aux | grep '/home/ioxnsun/bot/' | grep -v grep || echo 'Другие боты не найдены'
-          echo ''
-          echo 'Последние строки лога нашего бота:'
-          tail -20 ${{ env.PROJECT_PATH }}/bot_output.log 2>/dev/null || echo 'Лог файл не найден'
+          echo '📄 Шаг 6: Последние строки лога...'
+          sudo journalctl -u sslbot.service -n 20 --no-pager
         "
 
     - name: Notify Telegram about deployment
