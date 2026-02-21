@@ -69,27 +69,29 @@ jobs:
     - name: Install sshpass
       run: sudo apt-get update && sudo apt-get install -y sshpass
 
-    - name: Deploy via SSH
+    - name: Create directory on server
       run: |
-        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          mkdir -p ${{ env.PROJECT_PATH }}
-        "
-        
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ${{ env.PROJECT_PATH }}"
+
+    - name: Copy files via rsync
+      run: |
         sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete -e 'ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no' \
           --exclude '.git' \
           --exclude '.github' \
           --exclude '__pycache__' \
           --exclude '*.pyc' \
           --exclude 'tests' \
+          --exclude '.pytest_cache' \
+          --exclude '.coverage' \
           ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.PROJECT_PATH }}/
 
-    - name: Restart bot
+    - name: Deploy and restart bot
       run: |
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
           cd ${{ env.PROJECT_PATH }}
           
           # Создаем виртуальное окружение если его нет
-          if [ ! -d \"venv\" ]; then
+          if [ ! -d 'venv' ]; then
             python3 -m venv venv
           fi
           
@@ -102,16 +104,17 @@ jobs:
           sed -i 's/{{token}}/${{ secrets.BOT_TOKEN }}/g' ssl_bot.py
           
           # Перезапускаем бота
-          pkill -f \"python.*ssl_bot.py\" || true
+          pkill -f 'python.*ssl_bot.py' || true
           sleep 2
-          nohup python ssl_bot.py > /dev/null 2>&1 &
+          nohup python ssl_bot.py > bot_output.log 2>&1 &
           
           # Проверяем запуск
           sleep 3
-          if pgrep -f \"python.*ssl_bot.py\" > /dev/null; then
-            echo \"✅ Bot started\"
+          if pgrep -f 'python.*ssl_bot.py' > /dev/null; then
+            echo '✅ Bot started successfully'
           else
-            echo \"❌ Bot failed\"
+            echo '❌ Bot failed to start'
+            cat bot_output.log
             exit 1
           fi
         "
@@ -125,5 +128,11 @@ jobs:
         message: |
           ${{ job.status == 'success' && '✅' || '❌' }} *Deployment to Raspberry Pi*
           
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          
           Status: *${{ job.status }}*
-          Server: `${{ secrets.SSH_HOST }}`
+          Server: `${{ secrets.SSH_HOST }}:${{ secrets.SSH_PORT }}`
+          Path: `${{ env.PROJECT_PATH }}`
+        format: markdown
