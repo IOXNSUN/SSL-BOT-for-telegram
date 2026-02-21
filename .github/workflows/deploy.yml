@@ -132,20 +132,22 @@ jobs:
           fi
         "
 
-    - name: Stop old bot process
+    - name: Stop old bot process (only from our project folder)
       continue-on-error: true
       run: |
-        echo "🛑 Останавливаем старые процессы бота..."
+        echo "🛑 Останавливаем старые процессы бота из папки ${{ env.PROJECT_PATH }}..."
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          echo 'Поиск процессов бота...'
-          pgrep -f 'python.*ssl_bot.py' -a || echo 'Процессы не найдены'
+          echo 'Поиск процессов бота в нашей папке...'
+          ps aux | grep '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' | grep -v grep
+          
           echo 'Остановка процессов...'
-          pkill -f 'python.*ssl_bot.py' 2>&1 || echo 'Процессы не найдены или уже остановлены'
+          pkill -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' 2>&1 || echo 'Процессы не найдены в нашей папке'
           sleep 2
+          
           echo 'Проверка после остановки:'
-          pgrep -f 'python.*ssl_bot.py' -a || echo '✅ Все процессы остановлены'
+          ps aux | grep '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' | grep -v grep || echo '✅ Процессы в нашей папке остановлены'
         "
-        echo "✅ Шаг остановки завершен (ошибки игнорируются)"
+        echo "✅ Шаг остановки завершен"
 
     - name: Deploy and restart bot
       run: |
@@ -196,10 +198,10 @@ jobs:
           sleep 5
           
           echo '🔍 Шаг 6: Проверка запуска...'
-          if pgrep -f 'python.*ssl_bot.py' > /dev/null; then
+          if pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' > /dev/null; then
             echo '✅ Бот успешно запущен'
             echo '📄 Информация о процессе:'
-            ps aux | grep python.*ssl_bot.py | grep -v grep
+            ps aux | grep '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' | grep -v grep
           else
             echo '❌ Бот не запустился'
             echo '📄 Последние 20 строк лога:'
@@ -221,10 +223,13 @@ jobs:
           echo 'Все Python процессы:'
           ps aux | grep python
           echo ''
-          echo 'Специфичные процессы бота:'
-          pgrep -f 'python.*ssl_bot.py' -a || echo 'Бот не запущен'
+          echo 'Специфичные процессы нашего бота:'
+          pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' -a || echo 'Наш бот не запущен'
           echo ''
-          echo 'Последние строки лога:'
+          echo 'Другие боты (должны работать):'
+          ps aux | grep '/home/ioxnsun/bot/' | grep -v grep || echo 'Другие боты не найдены'
+          echo ''
+          echo 'Последние строки лога нашего бота:'
           tail -20 ${{ env.PROJECT_PATH }}/bot_output.log 2>/dev/null || echo 'Лог файл не найден'
         "
 
