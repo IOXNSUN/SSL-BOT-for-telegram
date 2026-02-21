@@ -224,6 +224,44 @@ jobs:
           echo '🎉 Деплой завершен успешно'
         "
 
+    - name: Health Check - Verify bot is working
+      run: |
+        echo "🏥 Проверка работоспособности бота..."
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          # Даем боту время на инициализацию
+          sleep 5
+          
+          echo '🔍 Шаг 1: Проверка процесса...'
+          BOT_PID=\$(pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py')
+          if [ -z \"\$BOT_PID\" ]; then
+            echo '❌ КРИТИЧНО: Процесс бота не найден!'
+            exit 1
+          else
+            echo \"✅ Процесс бота работает (PID: \$BOT_PID)\"
+          fi
+          
+          echo '📄 Шаг 2: Проверка логов...'
+          if [ -f ${{ env.PROJECT_PATH }}/bot_output.log ]; then
+            echo 'Последние 20 строк лога:'
+            tail -20 ${{ env.PROJECT_PATH }}/bot_output.log
+            
+            # Проверяем на критические ошибки
+            if tail -50 ${{ env.PROJECT_PATH }}/bot_output.log | grep -E 'ERROR|CRITICAL|Traceback' > /dev/null; then
+              echo '❌ Найдены ошибки в логах!'
+              exit 1
+            else
+              echo '✅ Критических ошибок в логах нет'
+            fi
+          else
+            echo '⚠️ Файл лога не найден'
+          fi
+          
+          echo '📊 Шаг 3: Использование ресурсов...'
+          ps -p \$BOT_PID -o %cpu,%mem,etime || echo 'Не удалось получить информацию'
+          
+          echo '🎉 Health check успешно пройден!'
+        "
+
     - name: Final debug - Check running processes
       run: |
         echo "📊 Финальная проверка процессов на сервере:"
