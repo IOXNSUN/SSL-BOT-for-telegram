@@ -137,16 +137,20 @@ jobs:
         echo "🛑 Останавливаем старые процессы бота из папки ${{ env.PROJECT_PATH }}..."
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
           echo 'Поиск процессов бота в нашей папке...'
-          # Ищем процессы
-          PIDS=\$(pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' || true)
+          # Находим PID'ы процессов из нашей папки
+          PIDS=\$(ps aux | grep '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' | grep -v grep | awk '{print \$2}')
           
           if [ -n \"\$PIDS\" ]; then
             echo \"Найдены процессы: \$PIDS\"
-            echo 'Останавливаем...'
-            pkill -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' 2>&1 || true
+            echo 'Останавливаем процессы...'
+            # Убиваем каждый процесс по PID
+            for PID in \$PIDS; do
+              echo \"Убиваем процесс \$PID\"
+              kill -9 \$PID 2>/dev/null || true
+            done
             sleep 2
             echo 'Проверка:'
-            pgrep -f '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' -a || echo '✅ Процессы остановлены'
+            ps aux | grep '${{ env.PROJECT_PATH }}/venv/bin/python.*ssl_bot.py' | grep -v grep || echo '✅ Процессы остановлены'
           else
             echo '✅ Процессы не найдены (это нормально)'
           fi
