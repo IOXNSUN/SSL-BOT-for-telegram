@@ -69,12 +69,34 @@ jobs:
     - name: Install sshpass
       run: sudo apt-get update && sudo apt-get install -y sshpass
 
+    - name: Debug - Test SSH connection
+      run: |
+        echo "🔍 Проверка SSH подключения..."
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          echo '✅ SSH connection successful'
+          echo '📌 Hostname: ' \$(hostname)
+          echo '📌 Date: ' \$(date)
+          echo '📌 Current user: ' \$(whoami)
+        "
+
     - name: Create directory on server
       run: |
-        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ${{ env.PROJECT_PATH }}"
+        echo "📁 Создание директории проекта..."
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          mkdir -p ${{ env.PROJECT_PATH }}
+          echo '✅ Директория создана или уже существует'
+        "
+
+    - name: Debug - Show directory before copy
+      run: |
+        echo "📂 Содержимое директории ДО копирования:"
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          ls -la ${{ env.PROJECT_PATH }} || echo 'Директория пуста'
+        "
 
     - name: Copy files via rsync
       run: |
+        echo "📋 Копирование файлов на сервер..."
         sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --delete -e 'ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=no' \
           --exclude '.git' \
           --exclude '.github' \
@@ -84,41 +106,92 @@ jobs:
           --exclude '.pytest_cache' \
           --exclude '.coverage' \
           ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.PROJECT_PATH }}/
+        echo "✅ Файлы скопированы"
+
+    - name: Debug - Show directory after copy
+      run: |
+        echo "📂 Содержимое директории ПОСЛЕ копирования:"
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          ls -la ${{ env.PROJECT_PATH }}
+        "
+
+    - name: Debug - Check Python environment
+      run: |
+        echo "🐍 Проверка Python окружения на сервере:"
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          echo 'Python version:'
+          python3 --version
+          echo 'Pip version:'
+          pip3 --version
+          echo 'Venv status:'
+          if [ -d '${{ env.PROJECT_PATH }}/venv' ]; then
+            echo '✅ venv существует'
+            ls -la ${{ env.PROJECT_PATH }}/venv/bin/
+          else
+            echo '❌ venv не существует'
+          fi
+        "
 
     - name: Deploy and restart bot
       run: |
+        echo "🚀 Начинаем деплой и запуск бота..."
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-          set +e  # Временно отключаем выход при ошибках
+          set -x  # Включаем отладку - каждая команда будет выводиться
           
           cd ${{ env.PROJECT_PATH }}
           
-          echo '📦 Проверяем виртуальное окружение...'
+          echo '📦 Шаг 1: Проверка виртуального окружения...'
           if [ ! -f 'venv/bin/activate' ]; then
             echo '❌ venv не найден! Создаем...'
             python3 -m venv venv
+            if [ $? -ne 0 ]; then
+              echo '❌ Ошибка создания venv!'
+              exit 1
+            fi
           else
             echo '✅ venv существует'
           fi
           
-          echo '📚 Устанавливаем/обновляем зависимости...'
+          echo '📚 Шаг 2: Установка зависимостей...'
+          echo 'Upgrade pip:'
           venv/bin/pip install --upgrade pip
+          echo 'Pip version:'
+          venv/bin/pip --version
+          echo 'Install requirements:'
           venv/bin/pip install -r requirements.txt
+          if [ $? -ne 0 ]; then
+            echo '❌ Ошибка установки зависимостей!'
+            exit 1
+          fi
           
-          echo '🔑 Обновляем токен бота...'
-          sed -i 's/{{token}}/${{ secrets.BOT_TOKEN }}/g' ssl_bot.py
+          echo '🔑 Шаг 3: Обновление токена бота...'
+          if [ -f ssl_bot.py ]; then
+            sed -i 's/{{token}}/${{ secrets.BOT_TOKEN }}/g' ssl_bot.py
+            echo '✅ Токен обновлен'
+          else
+            echo '❌ Файл ssl_bot.py не найден!'
+            ls -la
+            exit 1
+          fi
           
-          echo '🔄 Останавливаем старый процесс бота (если есть)...'
-          # Просто убиваем процесс, игнорируем любые ошибки
-          pkill -f 'python.*ssl_bot.py' 2>&1 || echo '✅ Процесс не найден - это нормально для первого запуска'
+          echo '🔄 Шаг 4: Проверка запущенных процессов бота...'
+          pgrep -f 'python.*ssl_bot.py' && echo 'Бот запущен' || echo 'Бот не запущен'
+          
+          echo '🛑 Шаг 5: Остановка старого процесса...'
+          # Пытаемся остановить, но игнорируем ошибки
+          pkill -f 'python.*ssl_bot.py' 2>&1 || echo 'Процесс не найден (это нормально)'
           sleep 2
           
-          echo '🚀 Запускаем бота...'
+          echo '🚀 Шаг 6: Запуск нового процесса бота...'
           cd ${{ env.PROJECT_PATH }}
           nohup venv/bin/python ssl_bot.py > bot_output.log 2>&1 &
+          BOT_PID=$!
+          echo "Бот запущен с PID: $BOT_PID"
           
-          echo '⏳ Ждем запуск...'
+          echo '⏳ Шаг 7: Ожидание запуска...'
           sleep 5
           
+          echo '🔍 Шаг 8: Проверка запуска...'
           if pgrep -f 'python.*ssl_bot.py' > /dev/null; then
             echo '✅ Бот успешно запущен'
             echo '📄 Информация о процессе:'
@@ -126,12 +199,29 @@ jobs:
           else
             echo '❌ Бот не запустился'
             echo '📄 Последние 20 строк лога:'
-            tail -20 bot_output.log
+            if [ -f bot_output.log ]; then
+              tail -20 bot_output.log
+            else
+              echo 'Файл лога не создан'
+            fi
             exit 1
           fi
           
-          set -e  # Включаем обратно
-          echo '🎉 Деплой завершен успешно'
+          echo '🎉 Шаг 9: Деплой завершен успешно'
+        "
+
+    - name: Final debug - Check running processes
+      run: |
+        echo "📊 Финальная проверка процессов на сервере:"
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          echo 'Все Python процессы:'
+          ps aux | grep python
+          echo ''
+          echo 'Специфичные процессы бота:'
+          pgrep -f 'python.*ssl_bot.py' -a || echo 'Бот не запущен'
+          echo ''
+          echo 'Последние строки лога:'
+          tail -20 ${{ env.PROJECT_PATH }}/bot_output.log 2>/dev/null || echo 'Лог файл не найден'
         "
 
     - name: Notify Telegram about deployment
