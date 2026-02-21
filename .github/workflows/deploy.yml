@@ -105,8 +105,9 @@ jobs:
           echo '🔑 Обновляем токен бота...'
           sed -i 's/{{token}}/${{ secrets.BOT_TOKEN }}/g' ssl_bot.py
           
-          echo '🔄 Перезапускаем бота...'
-          pkill -f 'python.*ssl_bot.py' || true
+          echo '🔄 Останавливаем старый процесс бота (если есть)...'
+          # Игнорируем ошибку, если процесс не найден
+          pkill -f 'python.*ssl_bot.py' 2>/dev/null || true
           sleep 2
           
           echo '🚀 Запускаем бота...'
