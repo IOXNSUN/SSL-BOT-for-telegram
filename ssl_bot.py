@@ -27,7 +27,7 @@ logger.setLevel(logging.INFO)
 
 if not logger.handlers:
     file_handler = TimedRotatingFileHandler(
-        "/home/........",
+        "/home/ioxnsun/SSL-BOT-for-telegram/bot.log",
         when="D",
         interval=1,
         backupCount=7
