@@ -90,34 +90,39 @@ jobs:
         sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
           cd ${{ env.PROJECT_PATH }}
           
-          echo '📦 Creating virtual environment if needed...'
-          if [ ! -d 'venv' ]; then
+          echo '📦 Проверяем виртуальное окружение...'
+          if [ ! -f 'venv/bin/activate' ]; then
+            echo '❌ venv не найден! Создаем...'
             python3 -m venv venv
+          else
+            echo '✅ venv существует'
           fi
           
-          echo '📚 Installing dependencies...'
+          echo '📚 Устанавливаем/обновляем зависимости...'
           venv/bin/pip install --upgrade pip
           venv/bin/pip install -r requirements.txt
           
-          echo '🔑 Updating bot token...'
+          echo '🔑 Обновляем токен бота...'
           sed -i 's/{{token}}/${{ secrets.BOT_TOKEN }}/g' ssl_bot.py
           
-          echo '🔄 Restarting bot...'
+          echo '🔄 Перезапускаем бота...'
           pkill -f 'python.*ssl_bot.py' || true
           sleep 2
           
-          echo '🚀 Starting bot...'
+          echo '🚀 Запускаем бота...'
           cd ${{ env.PROJECT_PATH }}
           nohup venv/bin/python ssl_bot.py > bot_output.log 2>&1 &
           
-          echo '⏳ Waiting for bot to start...'
-          sleep 3
+          echo '⏳ Ждем запуск...'
+          sleep 5
           
           if pgrep -f 'python.*ssl_bot.py' > /dev/null; then
-            echo '✅ Bot started successfully'
+            echo '✅ Бот успешно запущен'
+            echo '📄 Информация о процессе:'
+            ps aux | grep python.*ssl_bot.py | grep -v grep
           else
-            echo '❌ Bot failed to start'
-            echo '📄 Last 20 lines of log:'
+            echo '❌ Бот не запустился'
+            echo '📄 Последние 20 строк лога:'
             tail -20 bot_output.log
             exit 1
           fi
@@ -138,4 +143,5 @@ jobs:
           
           Status: *${{ job.status }}*
           Server: `${{ secrets.SSH_HOST }}:${{ secrets.SSH_PORT }}`
+          Path: `${{ env.PROJECT_PATH }}`
         format: markdown
