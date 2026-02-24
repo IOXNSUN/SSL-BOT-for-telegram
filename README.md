@@ -1,6 +1,6 @@
 # SSL-BOT-for-telegram 🚀
 
-![Главный скриншот](screenshots/main.png)
+![Главный скриншот](screenshots/Снимок экрана 2026-02-21 001602.jpg)
 
 ## О проекте
 Telegram-бот для проверки SSL-сертификатов, работающий 24/7.  
@@ -14,8 +14,7 @@ Telegram-бот для проверки SSL-сертификатов, работ
 - pytest, flake8, black
 
 ## Скриншоты
-![Скриншот 1](screenshots/1.png)
-![Скриншот 2](screenshots/2.png)
+![Скриншот 1](screenshots/Снимок экрана 2026-02-21 001718.jpg)
 
 ## Установка и запуск
 ```bash
@@ -33,4 +32,4 @@ CI/CD
 Telegram-уведомления о статусе тестов и деплоя
 
 Ссылки
-Telegram-бот
+[Telegram-бот](https://t.me/CPA_SSL_BOT)
