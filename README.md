@@ -32,4 +32,4 @@ CI/CD
 Telegram-уведомления о статусе тестов и деплоя
 
 Ссылки
-[Telegram-бот](https://t.me/CPA_SSL_BOT)
+[https://t.me/CPA_SSL_BOT](https://t.me/CPA_SSL_BOT)
