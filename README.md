@@ -17,7 +17,7 @@ Telegram-бот для проверки SSL-сертификатов, работ
 ![Скриншот 1](screenshots/Снимок экрана 2026-02-21 001718.jpg)
 
 ## Установка и запуск
-```bash
+``bash
 git clone https://github.com/IOXNSUN/SSL-BOT-for-telegram.git
 cd SSL-BOT-for-telegram
 python3 -m venv venv
@@ -32,4 +32,4 @@ CI/CD
 Telegram-уведомления о статусе тестов и деплоя
 
 Ссылки
-- [Telegram-бот](https://t.me/CPA_SSL_BOT)
+- 🚀 [Telegram-бот](https://t.me/CPA_SSL_BOT)
